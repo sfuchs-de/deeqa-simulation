@@ -94,7 +94,7 @@ while error>0.001,
     wage_exp_old=wage_exp;
     error=sum(sum(abs(wage_blue_upd-wage_blue)));
     
-    wage_blue=.7*wage_blue+.3*wage_blue_upd;
+    wage_blue=.7*wage_blue+.3*wage_blue_upd
     wage_white=.7*wage_white+.3*wage_white_upd;
     wage_exp=.7*wage_exp+.3*wage_exp_upd;
 end

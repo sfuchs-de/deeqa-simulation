@@ -89,5 +89,5 @@ for i=1:nregions,
         labor_new_ind(1,1,i,r)=labor_new_ind(1,1,i,r)-adjustment(i,r);
     end
 end
-adjustment=sum(sum(squeeze(sum(sum(labor_new_ind)))-labor));
+adjustment=squeeze(sum(sum(labor_new_ind)))-labor
 labor_new=squeeze(sum(sum(labor_new_ind,4),3));

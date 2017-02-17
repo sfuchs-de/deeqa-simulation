@@ -12,8 +12,8 @@
 %% SETUP
 clear all
 nregions=2;
-ndest=1;
-nsector=1;
+ndest=2;
+nsector=2;
 noccupations=2;
 nfirms=5;
 time=10;
@@ -22,9 +22,9 @@ while error>0,
     nworkers_white=round(rand(nregions,nsector)*50)+1;
     nworkers_blue=round(rand(nregions,nsector)*500)+1;
     nworkers_exp=round(rand(nregions,nsector,ndest)*5)+1;
-    error_temp=nworkers_white-nworkers_exp;
+    error_temp=nworkers_white-sum(nworkers_exp,3);
     error_temp(error_temp>0)=0;
-    error=sum(abs(error_temp));
+    error=sum(sum(abs(error_temp)));
 end
 export_market_size=rand(ndest,nsector)*1000;
 fixed_cost=rand(ndest,1);
@@ -40,17 +40,17 @@ end
 
 beta=.8;
 eta=.7; %CD Share of Blue collar workers in production
-delta=.2; % CD Share of experience in marketing
+delta=.1; % CD Share of experience in marketing
 gamma=.1; % CD Share of blue collar in marketing
-delta_1=.1; %Share of workers learning
-delta_2=.1; %Share of workers forgetting
+delta_1=.3; %Share of workers learning
+delta_2=.05; %Share of workers forgetting
 
 %Assign to model object
-Model.nregions=2;
-Model.ndest=1;
-Model.nsector=1;
-Model.noccupations=2;
-Model.nfirms=5;
+Model.nregions=nregions;
+Model.ndest=ndest;
+Model.nsector=nsector;
+Model.noccupations=noccupations;
+Model.nfirms=nfirms;
 Model.nworkers_white=nworkers_white;
 Model.nworkers_blue=nworkers_blue;
 Model.nworkers_exp=nworkers_exp;
@@ -74,6 +74,10 @@ Model.delta_2=delta_2; %Share of workers forgetting
 %% STATIC LABOR MARKET EQUILIBRIUM
 %Initial wage guess
 [wage_blue,wage_white,wage_exp,quant_prod,nworkers_exp_upd,lab_demand_white] = Static_Eq(Model);
+if sum(sum(isnan(wage_blue)))==1 || sum(sum(isnan(wage_white)))==1 || sum(sum(sum(isnan(wage_exp))))==1,
+    disp('Problem with wage subroutine');
+end
+
 %Update knowledge premia subject to knowledge creation
 Model.nworkers_exp=nworkers_exp_upd;
 [wage_blue,wage_white,wage_exp,quant_prod] = Static_Eq(Model);
@@ -81,8 +85,8 @@ Model.nworkers_exp=nworkers_exp_upd;
 
 
 %Output panel
-worker_panel_white=zeros(sum(nworkers_white),3+ndest,time);
-worker_panel_blue=zeros(sum(nworkers_blue),3,time);
+worker_panel_white=zeros(sum(sum(nworkers_white)),4+ndest,time);
+worker_panel_blue=zeros(sum(sum(nworkers_blue)),3,time);
 firm_panel=zeros(nfirms,ndest,nsector,nregions,time);
 
 firm_panel(:,:,:,:,1)=quant_prod;
@@ -93,8 +97,8 @@ for j=1:nregions,
         stor1=nworkers_blue(j,l);
         stor2=j;
         stor3=l;
-        k=1;
-        while k<stor1+1;
+        k=0;
+        while k<stor1;
             worker_panel_blue(m,1,1)=stor2; %Regions
             worker_panel_blue(m,2,1)=stor3; %Sector
             worker_panel_blue(m,3,1)=wage_blue(stor2,stor3); %Wage
@@ -110,8 +114,8 @@ for j=1:nregions,
         stor1=nworkers_white(j,l);
         stor2=j;
         stor3=l;
-        k=1;
-        while k<stor1+1;
+        k=0;
+        while k<stor1;
             worker_panel_white(m,1,1)=stor2; %Regions
             worker_panel_white(m,2,1)=stor3; %Sector
             worker_panel_white(m,3,1)=wage_white(stor2,stor3); %Wage
@@ -122,19 +126,21 @@ for j=1:nregions,
 end
 
 
-m=1;
+
 for j=1:nregions,
     for l=1:nsector,
         for n=1:ndest,
+            k=0;
             stor1=nworkers_exp(j,l,n);
-            stor2=j;
-            stor3=l;
-            stor4=n;
-            k=1;
-            while k<stor1+1;
-                if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3,
+            m=1;
+            while k<stor1;
+                stor2=j;
+                stor3=l;
+                stor4=n;
+                if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,4,1)~=1;
                     worker_panel_white(m,3,1)=wage_white(stor2,stor3)+wage_exp(j,l,n); %Wage
-                    worker_panel_white(m,3+n,1)=1;
+                    worker_panel_white(m,4,1)=1;
+                    worker_panel_white(m,4+n,1)=1;
                     k=k+1;
                 end
                 m=m+1;
@@ -150,60 +156,67 @@ nworkers_exp_old=nworkers_exp;
 nworkers_exp=nworkers_exp_upd; %Actual knowledge creation in jobs, changes knowledge supply
 
 %Output into panel (more complex)
-m=1;
+
+
 for j=1:nregions,
     for l=1:nsector,
         for n=1:ndest,
+            k=0;
             stor1=abs(nworkers_exp(j,l,n)-nworkers_exp_old(j,l,n));
-            stor2=j;
-            stor3=l;
-            stor4=n;
-            k=1;
-            while k<stor1+1,
+            m=1;
+            while k<stor1;
+                stor2=j;
+                stor3=l;
+                stor4=n;
                 if nworkers_exp(j,l,n)<nworkers_exp_old(j,l,n), %If less knowledgeable workers then make some forget
-                    if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,3+n,1)==1,
-                        worker_panel_white(m,3+n,1)=0;
+                    if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,4+n,1)==1 && worker_panel_white(m,4,1)==1,
+                        worker_panel_white(m,4,1)=0;
+                        worker_panel_white(m,4+n,1)=0;
                         k=k+1;
                     end
                 end
                 if nworkers_exp(j,l,n)>nworkers_exp_old(j,l,n), %If more knowledgeable workers then add workers
-                    if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,3+n,1)==0,
-                        worker_panel_white(m,3+n,1)=1;
+                    if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,4+n,1)==0 && worker_panel_white(m,4,1)==0,
+                        worker_panel_white(m,4,1)=1;
+                        worker_panel_white(m,4+n,1)=1;
                         k=k+1;
                     end
                 end
+                if nworkers_exp(j,l,n)==nworkers_exp_old(j,l,n),
+                    k=k+1;
+                end
                 m=m+1;
             end
+            test_obj(j,l,n)=k;
         end
     end
 end
+test_obj-abs(nworkers_exp-nworkers_exp_old)
+clear test_obj
 
 
-
-m=1;
 for j=1:nregions,
     for l=1:nsector,
         for n=1:ndest,
+            k=0;
             stor1=nworkers_exp(j,l,n);
-            stor2=j;
-            stor3=l;
-            stor4=n;
-            k=1;
-            while k<stor1+1;
-                if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,3+n,1)==1,
+            m=1;
+            while k<stor1;
+                stor2=j;
+                stor3=l;
+                stor4=n;
+                if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,4+n,1)==1,
                     worker_panel_white(m,3,1)=wage_white(stor2,stor3)+wage_exp(j,l,n); %Wage
                     k=k+1;
                 end
                 m=m+1;
             end
+            test_obj(j,l,n)=k;
         end
     end
 end
 
-
-
-
-
+%checked and correct
 
 %% LABOR MOBILITY DECISION
 
@@ -221,17 +234,19 @@ nworkers_white_old=nworkers_white;
 
 %Run for each occupation type
 [nworkers_blue,nworkers_blue_ind] = LaborLoop_adj(wage_blue, nworkers_blue, tau_sec, tau_geo, nu, beta,nregions,nsector);
-[nworkers_white,nworkers_white_ind] = LaborLoop_adj(wage_white, nworkers_white-nworkers_exp, tau_sec, tau_geo, nu, beta,nregions,nsector);
-[nworkers_exp,nworkers_white_exp_ind] = LaborLoop_adj(wage_white+wage_exp(:,1), nworkers_exp(:,1), tau_sec, tau_geo, nu, beta,nregions,nsector);
-Model.nworkers_white=nworkers_white+nworkers_exp;
-nworkers_white=nworkers_white+nworkers_exp;
+[nworkers_white,nworkers_white_ind] = LaborLoop_adj(wage_white, nworkers_white-sum(nworkers_exp,3), tau_sec, tau_geo, nu, beta,nregions,nsector);
+for i=1:ndest,
+    [nworkers_exp(:,:,i),nworkers_white_exp_ind(:,:,:,:,i)] = LaborLoop_adj(wage_white+wage_exp(:,:,i), nworkers_exp(:,:,i), tau_sec, tau_geo, nu, beta,nregions,nsector);
+end
+
+
+Model.nworkers_white=nworkers_white+sum(nworkers_exp,3);
+nworkers_white=nworkers_white+sum(nworkers_exp,3);
 Model.nworkers_blue=nworkers_blue;
 Model.nworkers_exp=nworkers_exp;
 [wage_blue,wage_white,wage_exp,quant_prod,nworkers_exp_upd,lab_demand_white] = Static_Eq(Model);
 Model.nworkers_exp=nworkers_exp_upd;
 [wage_blue,wage_white,wage_exp,quant_prod] = Static_Eq(Model); %Adjust wages to reflect knowledge creation
-
-
 
 
 worker_panel_store_2=worker_panel_blue(:,:,1);
@@ -240,13 +255,13 @@ for i=1:nregions,
         for r=1:nsector,
             for q=1:nsector,
                 m=1;
-                stor1=round(nworkers_blue_ind(j,q,i,r));
+                stor1=nworkers_blue_ind(j,q,i,r);
                 stor2=i;
                 stor3=r;
                 stor4=j;
                 stor5=q;
-                k=1;
-                while k<stor1+1;
+                k=0;
+                while k<stor1;
                     if worker_panel_blue(m,1,1)==stor2 && worker_panel_blue(m,2,1)==stor3;
                         worker_panel_blue(m,1,2)=stor4; %Regions
                         worker_panel_blue(m,2,2)=stor5; %Sector
@@ -257,14 +272,23 @@ for i=1:nregions,
                     end
                     m=m+1;
                 end
+                test_obj(j,q,i,r)=k;
             end
         end
     end
 end
 worker_panel_blue(:,:,1)=worker_panel_store_2;
 
-
+clear test_obj
 worker_panel_store=worker_panel_white(:,:,1);
+
+%Diagnostics
+sum(sum(sum(nworkers_exp_old)))
+size(worker_panel_white,1)-sum(sum(sum(sum(nworkers_white_ind))))
+sum(worker_panel_white(:,4,1))
+sum(sum(sum(nworkers_exp)))
+sum(sum(sum(sum(sum(nworkers_white_exp_ind)))))
+
 for i=1:nregions,
     for j=1:nregions,
         for r=1:nsector,
@@ -275,8 +299,8 @@ for i=1:nregions,
                 stor3=r;
                 stor4=j;
                 stor5=q;
-                k=1;
-                while k<stor1+1;
+                k=0;
+                while k<stor1;
                     if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,4,1)~=1,
                         worker_panel_white(m,1,2)=stor4; %Regions
                         worker_panel_white(m,2,2)=stor5; %Sector
@@ -287,6 +311,7 @@ for i=1:nregions,
                     end
                     m=m+1;
                 end
+                test_obj(j,q,i,r)=k;
             end
         end
     end
@@ -300,25 +325,28 @@ for i=1:nregions,
     for j=1:nregions,
         for r=1:nsector,
             for q=1:nsector,
-                m=1;
-                stor1=round(nworkers_white_exp_ind(j,q,i,r));
-                stor2=i;
-                stor3=r;
-                stor4=j;
-                stor5=q;
-                r;
-                k=1;
-                while k<stor1+1;
-                    if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,4,1)~=0,
-                        worker_panel_white(m,1,2)=stor4; %Regions
-                        worker_panel_white(m,2,2)=stor5; %Sector
-                        worker_panel_white(m,3,2)=wage_white(stor4,stor5)+wage_exp(stor4,stor5,1); %Wage
-                        worker_panel_white(m,4,2)=1;
-                        worker_panel_white(m,1,1)=999;
-                        worker_panel_white(m,2,1)=999;
-                        k=k+1;
+                for p=1:ndest,
+                    m=1;
+                    stor1=round(nworkers_white_exp_ind(j,q,i,r,p));
+                    stor2=i;
+                    stor3=r;
+                    stor4=j;
+                    stor5=q;
+                    r;
+                    k=0;
+                    while k<stor1;
+                        if worker_panel_white(m,1,1)==stor2 && worker_panel_white(m,2,1)==stor3 && worker_panel_white(m,4+p,1)~=0,
+                            worker_panel_white(m,1,2)=stor4; %Regions
+                            worker_panel_white(m,2,2)=stor5; %Sector
+                            worker_panel_white(m,3,2)=wage_white(stor4,stor5)+wage_exp(stor4,stor5,p); %Wage
+                            worker_panel_white(m,4,2)=1;
+                            worker_panel_white(m,4+p,2)=1;
+                            worker_panel_white(m,1,1)=999;
+                            worker_panel_white(m,2,1)=999;
+                            k=k+1;
+                        end
+                        m=m+1;
                     end
-                    m=m+1;
                 end
             end
         end
@@ -329,32 +357,35 @@ clear worker_panel_store worker_panel_store_2;
 
 
 
-
 %% INTERMEDIATE STEP: KNOWLEDGE CREATION
 
 nworkers_exp_old=nworkers_exp;
 nworkers_exp=nworkers_exp_upd; %Actual knowledge creation in jobs, changes knowledge supply
 
 %Output into panel (more complex)
-m=1;
+nworkers_exp-nworkers_exp_old
+clear test_obj
 for j=1:nregions,
     for l=1:nsector,
         for n=1:ndest,
+            k=0;
             stor1=abs(nworkers_exp(j,l,n)-nworkers_exp_old(j,l,n));
-            stor2=j;
-            stor3=l;
-            stor4=n;
-            k=1;
-            while k<stor1+1,
+            m=1;
+            while k<stor1;
+                stor2=j;
+                stor3=l;
+                stor4=n;
                 if nworkers_exp(j,l,n)<nworkers_exp_old(j,l,n), %If less knowledgeable workers then make some forget
-                    if worker_panel_white(m,1,2)==stor2 && worker_panel_white(m,2,2)==stor3 && worker_panel_white(m,3+n,2)==1,
-                        worker_panel_white(m,3+n,2)=0;
+                    if worker_panel_white(m,1,2)==stor2 && worker_panel_white(m,2,2)==stor3 && worker_panel_white(m,4+n,2)==1 && worker_panel_white(m,4,2)==1,
+                        worker_panel_white(m,4,2)=0;
+                        worker_panel_white(m,4+n,2)=0;
                         k=k+1;
                     end
                 end
                 if nworkers_exp(j,l,n)>nworkers_exp_old(j,l,n), %If more knowledgeable workers then add workers
-                    if worker_panel_white(m,1,2)==stor2 && worker_panel_white(m,2,2)==stor3 && worker_panel_white(m,3+n,2)==0,
-                        worker_panel_white(m,3+n,2)=1;
+                    if worker_panel_white(m,1,2)==stor2 && worker_panel_white(m,2,2)==stor3 && worker_panel_white(m,4+n,2)==0 && worker_panel_white(m,4,2)==0,
+                        worker_panel_white(m,4,2)=1;
+                        worker_panel_white(m,4+n,2)=1;
                         k=k+1;
                     end
                 end
@@ -363,22 +394,37 @@ for j=1:nregions,
                 end
                 m=m+1;
             end
+            test_obj(j,l,n)=k;
+        end
+    end
+end
+test_obj-abs(nworkers_exp-nworkers_exp_old)
+clear test_obj
+
+
+for j=1:nregions,
+    for l=1:nsector,
+        for n=1:ndest,
+            k=0;
+            stor1=nworkers_exp(j,l,n);
+            m=1;
+            while k<stor1;
+                stor2=j;
+                stor3=l;
+                stor4=n;
+                if worker_panel_white(m,1,2)==stor2 && worker_panel_white(m,2,2)==stor3 && worker_panel_white(m,4+n,2)==1,
+                    worker_panel_white(m,3,2)=wage_white(stor2,stor3)+wage_exp(j,l,n); %Wage
+                    k=k+1;
+                end
+                m=m+1;
+            end
+            test_obj(j,l,n)=k;
         end
     end
 end
 
 
-
-
-
-for m=1:size(worker_panel_white,1),
-    stor2=worker_panel_white(m,1,2);
-    stor3=worker_panel_white(m,2,2);
-    if worker_panel_white(m,4,2)==1,
-        worker_panel_white(m,3,2)=wage_white(stor2,stor3)+wage_exp(stor2,stor3,1);
-    end
-end
-
+%checked and correct
 
 
 
@@ -390,22 +436,25 @@ Model.export_market_size=Model.export_market_size+rand(ndest,nsector)*10-5;
 t=3;
 [wage_blue,wage_white,wage_exp,quant_prod,nworkers_exp_upd,lab_demand_white] = Static_Eq(Model);
 
+
 nworkers_blue_old=nworkers_blue;
 nworkers_white_old=nworkers_white;
 
 %Run for each occupation type
 [nworkers_blue,nworkers_blue_ind] = LaborLoop_adj(wage_blue, nworkers_blue, tau_sec, tau_geo, nu, beta,nregions,nsector);
-[nworkers_white,nworkers_white_ind] = LaborLoop_adj(wage_white, nworkers_white-nworkers_exp, tau_sec, tau_geo, nu, beta,nregions,nsector);
-[nworkers_exp,nworkers_white_exp_ind] = LaborLoop_adj(wage_white+wage_exp(:,1), nworkers_exp(:,1), tau_sec, tau_geo, nu, beta,nregions,nsector);
-Model.nworkers_white=nworkers_white+nworkers_exp;
-nworkers_white=nworkers_white+nworkers_exp;
+[nworkers_white,nworkers_white_ind] = LaborLoop_adj(wage_white, nworkers_white-sum(nworkers_exp,3), tau_sec, tau_geo, nu, beta,nregions,nsector);
+for i=1:ndest,
+    [nworkers_exp(:,:,i),nworkers_white_exp_ind(:,:,:,:,i)] = LaborLoop_adj(wage_white+wage_exp(:,:,i), nworkers_exp(:,:,i), tau_sec, tau_geo, nu, beta,nregions,nsector);
+end
+
+
+Model.nworkers_white=nworkers_white+sum(nworkers_exp,3);
+nworkers_white=nworkers_white+sum(nworkers_exp,3);
 Model.nworkers_blue=nworkers_blue;
 Model.nworkers_exp=nworkers_exp;
 [wage_blue,wage_white,wage_exp,quant_prod,nworkers_exp_upd,lab_demand_white] = Static_Eq(Model);
 Model.nworkers_exp=nworkers_exp_upd;
 [wage_blue,wage_white,wage_exp,quant_prod] = Static_Eq(Model); %Adjust wages to reflect knowledge creation
-
-
 
 
 worker_panel_store_2=worker_panel_blue(:,:,t-1);
@@ -414,13 +463,13 @@ for i=1:nregions,
         for r=1:nsector,
             for q=1:nsector,
                 m=1;
-                stor1=round(nworkers_blue_ind(j,q,i,r));
+                stor1=nworkers_blue_ind(j,q,i,r);
                 stor2=i;
                 stor3=r;
                 stor4=j;
                 stor5=q;
-                k=1;
-                while k<stor1+1;
+                k=0;
+                while k<stor1;
                     if worker_panel_blue(m,1,t-1)==stor2 && worker_panel_blue(m,2,t-1)==stor3;
                         worker_panel_blue(m,1,t)=stor4; %Regions
                         worker_panel_blue(m,2,t)=stor5; %Sector
@@ -431,14 +480,23 @@ for i=1:nregions,
                     end
                     m=m+1;
                 end
+                test_obj(j,q,i,r)=k;
             end
         end
     end
 end
 worker_panel_blue(:,:,t-1)=worker_panel_store_2;
 
-
+clear test_obj
 worker_panel_store=worker_panel_white(:,:,t-1);
+
+%Diagnostics
+sum(sum(sum(nworkers_exp_old)))
+size(worker_panel_white,1)-sum(sum(sum(sum(nworkers_white_ind))))
+sum(worker_panel_white(:,4,t-1))
+sum(sum(sum(nworkers_exp)))
+sum(sum(sum(sum(sum(nworkers_white_exp_ind)))))
+
 for i=1:nregions,
     for j=1:nregions,
         for r=1:nsector,
@@ -449,8 +507,8 @@ for i=1:nregions,
                 stor3=r;
                 stor4=j;
                 stor5=q;
-                k=1;
-                while k<stor1+1;
+                k=0;
+                while k<stor1;
                     if worker_panel_white(m,1,t-1)==stor2 && worker_panel_white(m,2,t-1)==stor3 && worker_panel_white(m,4,t-1)~=1,
                         worker_panel_white(m,1,t)=stor4; %Regions
                         worker_panel_white(m,2,t)=stor5; %Sector
@@ -461,6 +519,7 @@ for i=1:nregions,
                     end
                     m=m+1;
                 end
+                test_obj(j,q,i,r)=k;
             end
         end
     end
@@ -474,25 +533,28 @@ for i=1:nregions,
     for j=1:nregions,
         for r=1:nsector,
             for q=1:nsector,
-                m=1;
-                stor1=round(nworkers_white_exp_ind(j,q,i,r));
-                stor2=i;
-                stor3=r;
-                stor4=j;
-                stor5=q;
-                r;
-                k=1;
-                while k<stor1+1;
-                    if worker_panel_white(m,1,t-1)==stor2 && worker_panel_white(m,2,t-1)==stor3 && worker_panel_white(m,4,t-1)~=0,
-                        worker_panel_white(m,1,t)=stor4; %Regions
-                        worker_panel_white(m,2,t)=stor5; %Sector
-                        worker_panel_white(m,3,t)=wage_white(stor4,stor5)+wage_exp(stor4,stor5,1); %Wage
-                        worker_panel_white(m,4,t)=1;
-                        worker_panel_white(m,1,t-1)=999;
-                        worker_panel_white(m,2,t-1)=999;
-                        k=k+1;
+                for p=1:ndest,
+                    m=1;
+                    stor1=round(nworkers_white_exp_ind(j,q,i,r,p));
+                    stor2=i;
+                    stor3=r;
+                    stor4=j;
+                    stor5=q;
+                    r;
+                    k=0;
+                    while k<stor1;
+                        if worker_panel_white(m,1,t-1)==stor2 && worker_panel_white(m,2,t-1)==stor3 && worker_panel_white(m,4+p,t-1)~=0,
+                            worker_panel_white(m,1,t)=stor4; %Regions
+                            worker_panel_white(m,2,t)=stor5; %Sector
+                            worker_panel_white(m,3,t)=wage_white(stor4,stor5)+wage_exp(stor4,stor5,p); %Wage
+                            worker_panel_white(m,4,t)=1;
+                            worker_panel_white(m,4+p,t)=1;
+                            worker_panel_white(m,1,t-1)=999;
+                            worker_panel_white(m,2,t-1)=999;
+                            k=k+1;
+                        end
+                        m=m+1;
                     end
-                    m=m+1;
                 end
             end
         end
@@ -504,31 +566,37 @@ clear worker_panel_store worker_panel_store_2;
 
 
 
+
+
 %% INTERMEDIATE STEP: KNOWLEDGE CREATION
 
 nworkers_exp_old=nworkers_exp;
 nworkers_exp=nworkers_exp_upd; %Actual knowledge creation in jobs, changes knowledge supply
 
 %Output into panel (more complex)
-m=1;
+nworkers_exp-nworkers_exp_old
+clear test_obj
 for j=1:nregions,
     for l=1:nsector,
         for n=1:ndest,
+            k=0;
             stor1=abs(nworkers_exp(j,l,n)-nworkers_exp_old(j,l,n));
-            stor2=j;
-            stor3=l;
-            stor4=n;
-            k=1;
-            while k<stor1+1,
+            m=1;
+            while k<stor1;
+                stor2=j;
+                stor3=l;
+                stor4=n;
                 if nworkers_exp(j,l,n)<nworkers_exp_old(j,l,n), %If less knowledgeable workers then make some forget
-                    if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,3+n,t)==1,
-                        worker_panel_white(m,3+n,t)=0;
+                    if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,4+n,t)==1 && worker_panel_white(m,4,t)==1,
+                        worker_panel_white(m,4,t)=0;
+                        worker_panel_white(m,4+n,t)=0;
                         k=k+1;
                     end
                 end
                 if nworkers_exp(j,l,n)>nworkers_exp_old(j,l,n), %If more knowledgeable workers then add workers
-                    if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,3+n,t)==0,
-                        worker_panel_white(m,3+n,t)=1;
+                    if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,4+n,t)==0 && worker_panel_white(m,4,t)==0,
+                        worker_panel_white(m,4,t)=1;
+                        worker_panel_white(m,4+n,t)=1;
                         k=k+1;
                     end
                 end
@@ -537,32 +605,34 @@ for j=1:nregions,
                 end
                 m=m+1;
             end
+            test_obj(j,l,n)=k;
         end
     end
 end
+test_obj-abs(nworkers_exp-nworkers_exp_old)
+clear test_obj
 
 
-
-
-
-for m=1:size(worker_panel_white,1),
-    stor2=worker_panel_white(m,1,t);
-    stor3=worker_panel_white(m,2,t);
-    if worker_panel_white(m,4,t)==1,
-        worker_panel_white(m,3,t)=wage_white(stor2,stor3)+wage_exp(stor2,stor3,1);
+for j=1:nregions,
+    for l=1:nsector,
+        for n=1:ndest,
+            k=0;
+            stor1=nworkers_exp(j,l,n);
+            m=1;
+            while k<stor1;
+                stor2=j;
+                stor3=l;
+                stor4=n;
+                if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,4+n,t)==1,
+                    worker_panel_white(m,3,t)=wage_white(stor2,stor3)+wage_exp(j,l,n); %Wage
+                    k=k+1;
+                end
+                m=m+1;
+            end
+            test_obj(j,l,n)=k;
+        end
     end
 end
-
-
-
-
-
-
-
-
-
-
-
 
 
 %% Simulate other time periods
@@ -579,26 +649,33 @@ for t=4:10,
     % 7) Adjust knowledge in panel
     % 8) Save firm trade in panel
     % Start over again/Save in panel file
+    
+    
+    
     %% LABOR MOBILITY DECISION
     Model.export_market_size=Model.export_market_size+rand(ndest,nsector)*10-5;
-    [wage_blue,wage_white,wage_exp,quant_prod,nworkers_exp_upd,lab_demand_white] = Static_Eq(Model)
+    t=3;
+    [wage_blue,wage_white,wage_exp,quant_prod,nworkers_exp_upd,lab_demand_white] = Static_Eq(Model);
+    
     
     nworkers_blue_old=nworkers_blue;
     nworkers_white_old=nworkers_white;
     
     %Run for each occupation type
     [nworkers_blue,nworkers_blue_ind] = LaborLoop_adj(wage_blue, nworkers_blue, tau_sec, tau_geo, nu, beta,nregions,nsector);
-    [nworkers_white,nworkers_white_ind] = LaborLoop_adj(wage_white, nworkers_white-nworkers_exp, tau_sec, tau_geo, nu, beta,nregions,nsector);
-    [nworkers_exp,nworkers_white_exp_ind] = LaborLoop_adj(wage_white+wage_exp(:,1), nworkers_exp(:,1), tau_sec, tau_geo, nu, beta,nregions,nsector);
-    Model.nworkers_white=nworkers_white+nworkers_exp;
-    nworkers_white=nworkers_white+nworkers_exp;
+    [nworkers_white,nworkers_white_ind] = LaborLoop_adj(wage_white, nworkers_white-sum(nworkers_exp,3), tau_sec, tau_geo, nu, beta,nregions,nsector);
+    for i=1:ndest,
+        [nworkers_exp(:,:,i),nworkers_white_exp_ind(:,:,:,:,i)] = LaborLoop_adj(wage_white+wage_exp(:,:,i), nworkers_exp(:,:,i), tau_sec, tau_geo, nu, beta,nregions,nsector);
+    end
+    
+    
+    Model.nworkers_white=nworkers_white+sum(nworkers_exp,3);
+    nworkers_white=nworkers_white+sum(nworkers_exp,3);
     Model.nworkers_blue=nworkers_blue;
     Model.nworkers_exp=nworkers_exp;
     [wage_blue,wage_white,wage_exp,quant_prod,nworkers_exp_upd,lab_demand_white] = Static_Eq(Model);
     Model.nworkers_exp=nworkers_exp_upd;
     [wage_blue,wage_white,wage_exp,quant_prod] = Static_Eq(Model); %Adjust wages to reflect knowledge creation
-    
-    
     
     
     worker_panel_store_2=worker_panel_blue(:,:,t-1);
@@ -607,13 +684,13 @@ for t=4:10,
             for r=1:nsector,
                 for q=1:nsector,
                     m=1;
-                    stor1=round(nworkers_blue_ind(j,q,i,r));
+                    stor1=nworkers_blue_ind(j,q,i,r);
                     stor2=i;
                     stor3=r;
                     stor4=j;
                     stor5=q;
-                    k=1;
-                    while k<stor1+1;
+                    k=0;
+                    while k<stor1;
                         if worker_panel_blue(m,1,t-1)==stor2 && worker_panel_blue(m,2,t-1)==stor3;
                             worker_panel_blue(m,1,t)=stor4; %Regions
                             worker_panel_blue(m,2,t)=stor5; %Sector
@@ -624,14 +701,23 @@ for t=4:10,
                         end
                         m=m+1;
                     end
+                    test_obj(j,q,i,r)=k;
                 end
             end
         end
     end
     worker_panel_blue(:,:,t-1)=worker_panel_store_2;
     
-    
+    clear test_obj
     worker_panel_store=worker_panel_white(:,:,t-1);
+    
+    %Diagnostics
+    sum(sum(sum(nworkers_exp_old)))
+    size(worker_panel_white,1)-sum(sum(sum(sum(nworkers_white_ind))))
+    sum(worker_panel_white(:,4,t-1))
+    sum(sum(sum(nworkers_exp)))
+    sum(sum(sum(sum(sum(nworkers_white_exp_ind)))))
+    
     for i=1:nregions,
         for j=1:nregions,
             for r=1:nsector,
@@ -642,8 +728,8 @@ for t=4:10,
                     stor3=r;
                     stor4=j;
                     stor5=q;
-                    k=1;
-                    while k<stor1+1;
+                    k=0;
+                    while k<stor1;
                         if worker_panel_white(m,1,t-1)==stor2 && worker_panel_white(m,2,t-1)==stor3 && worker_panel_white(m,4,t-1)~=1,
                             worker_panel_white(m,1,t)=stor4; %Regions
                             worker_panel_white(m,2,t)=stor5; %Sector
@@ -654,6 +740,7 @@ for t=4:10,
                         end
                         m=m+1;
                     end
+                    test_obj(j,q,i,r)=k;
                 end
             end
         end
@@ -667,25 +754,28 @@ for t=4:10,
         for j=1:nregions,
             for r=1:nsector,
                 for q=1:nsector,
-                    m=1;
-                    stor1=round(nworkers_white_exp_ind(j,q,i,r));
-                    stor2=i;
-                    stor3=r;
-                    stor4=j;
-                    stor5=q;
-                    r;
-                    k=1;
-                    while k<stor1+1;
-                        if worker_panel_white(m,1,t-1)==stor2 && worker_panel_white(m,2,t-1)==stor3 && worker_panel_white(m,4,t-1)~=0,
-                            worker_panel_white(m,1,t)=stor4; %Regions
-                            worker_panel_white(m,2,t)=stor5; %Sector
-                            worker_panel_white(m,3,t)=wage_white(stor4,stor5)+wage_exp(stor4,stor5,1); %Wage
-                            worker_panel_white(m,4,t)=1;
-                            worker_panel_white(m,1,t-1)=999;
-                            worker_panel_white(m,2,t-1)=999;
-                            k=k+1;
+                    for p=1:ndest,
+                        m=1;
+                        stor1=round(nworkers_white_exp_ind(j,q,i,r,p));
+                        stor2=i;
+                        stor3=r;
+                        stor4=j;
+                        stor5=q;
+                        r;
+                        k=0;
+                        while k<stor1;
+                            if worker_panel_white(m,1,t-1)==stor2 && worker_panel_white(m,2,t-1)==stor3 && worker_panel_white(m,4+p,t-1)~=0,
+                                worker_panel_white(m,1,t)=stor4; %Regions
+                                worker_panel_white(m,2,t)=stor5; %Sector
+                                worker_panel_white(m,3,t)=wage_white(stor4,stor5)+wage_exp(stor4,stor5,p); %Wage
+                                worker_panel_white(m,4,t)=1;
+                                worker_panel_white(m,4+p,t)=1;
+                                worker_panel_white(m,1,t-1)=999;
+                                worker_panel_white(m,2,t-1)=999;
+                                k=k+1;
+                            end
+                            m=m+1;
                         end
-                        m=m+1;
                     end
                 end
             end
@@ -697,31 +787,36 @@ for t=4:10,
     
     
     
+    
     %% INTERMEDIATE STEP: KNOWLEDGE CREATION
     
     nworkers_exp_old=nworkers_exp;
     nworkers_exp=nworkers_exp_upd; %Actual knowledge creation in jobs, changes knowledge supply
     
     %Output into panel (more complex)
-    m=1;
+    nworkers_exp-nworkers_exp_old
+    clear test_obj
     for j=1:nregions,
         for l=1:nsector,
             for n=1:ndest,
+                k=0;
                 stor1=abs(nworkers_exp(j,l,n)-nworkers_exp_old(j,l,n));
-                stor2=j;
-                stor3=l;
-                stor4=n;
-                k=1;
-                while k<stor1+1,
+                m=1;
+                while k<stor1;
+                    stor2=j;
+                    stor3=l;
+                    stor4=n;
                     if nworkers_exp(j,l,n)<nworkers_exp_old(j,l,n), %If less knowledgeable workers then make some forget
-                        if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,3+n,t)==1,
-                            worker_panel_white(m,3+n,t)=0;
+                        if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,4+n,t)==1 && worker_panel_white(m,4,t)==1,
+                            worker_panel_white(m,4,t)=0;
+                            worker_panel_white(m,4+n,t)=0;
                             k=k+1;
                         end
                     end
                     if nworkers_exp(j,l,n)>nworkers_exp_old(j,l,n), %If more knowledgeable workers then add workers
-                        if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,3+n,t)==0,
-                            worker_panel_white(m,3+n,t)=1;
+                        if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,4+n,t)==0 && worker_panel_white(m,4,t)==0,
+                            worker_panel_white(m,4,t)=1;
+                            worker_panel_white(m,4+n,t)=1;
                             k=k+1;
                         end
                     end
@@ -730,21 +825,35 @@ for t=4:10,
                     end
                     m=m+1;
                 end
+                test_obj(j,l,n)=k;
+            end
+        end
+    end
+    test_obj-abs(nworkers_exp-nworkers_exp_old)
+    clear test_obj
+    
+    
+    for j=1:nregions,
+        for l=1:nsector,
+            for n=1:ndest,
+                k=0;
+                stor1=nworkers_exp(j,l,n);
+                m=1;
+                while k<stor1;
+                    stor2=j;
+                    stor3=l;
+                    stor4=n;
+                    if worker_panel_white(m,1,t)==stor2 && worker_panel_white(m,2,t)==stor3 && worker_panel_white(m,4+n,t)==1,
+                        worker_panel_white(m,3,t)=wage_white(stor2,stor3)+wage_exp(j,l,n); %Wage
+                        k=k+1;
+                    end
+                    m=m+1;
+                end
+                test_obj(j,l,n)=k;
             end
         end
     end
     
-    
-    
-    
-    
-    for m=1:size(worker_panel_white,1),
-        stor2=worker_panel_white(m,1,t);
-        stor3=worker_panel_white(m,2,t);
-        if worker_panel_white(m,4,t)==1,
-            worker_panel_white(m,3,t)=wage_white(stor2,stor3)+wage_exp(stor2,stor3,1);
-        end
-    end
     
     
     %Step 8: Saving firm trade
