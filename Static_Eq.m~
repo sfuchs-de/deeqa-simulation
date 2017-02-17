@@ -94,9 +94,20 @@ while error>0.001,
     wage_exp_old=wage_exp;
     error=sum(sum(abs(wage_blue_upd-wage_blue)));
     
-    wage_blue=.7*wage_blue+.3*wage_blue_upd
+    wage_blue=.7*wage_blue+.3*wage_blue_upd;
     wage_white=.7*wage_white+.3*wage_white_upd;
     wage_exp=.7*wage_exp+.3*wage_exp_upd;
+    if sum(sum(isnan(wage_blue)))>0,
+        wage_blue=ones(nregions,nsector);
+    end
+    if sum(sum(isnan(wage_white)))>0,
+        wage_white=ones(nregions,nsector);
+    end
+    wag
+        
+end
+for i=1:ndest,
+    comp_wage_market(:,:,i)=wage_blue.^gamma.*wage_exp(:,:,i).^delta.*wage_white.^(1-gamma-delta);
 end
 lab_demand_white_firm=zeros(nfirms,nsector,nregions,ndest);
 for i=1:nfirms,
@@ -105,6 +116,9 @@ for i=1:nfirms,
             for j=1:ndest;
                 lab_demand_white_firm(i,s,r,j)=((1-gamma-delta).*fix_cost_firm(i,s,r,j)...
                 *comp_wage_market(r,s))/wage_white(r,s);
+                if market_penetration(i,j,s,r)==0,
+                    lab_demand_white_firm(i,s,r,j)=0;
+                end
             end
         end
     end
