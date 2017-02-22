@@ -48,7 +48,7 @@ while error>0.001,
     market_penetration=zeros(nfirms,ndest,nsector,nregions);
     price=zeros(nfirms,nsector,nregions,ndest);
     quant_prod=zeros(nfirms,ndest,nsector,nregions);
-    fix_cost_firm=zeros(nfirms,nsector,nregions,ndest);
+    fix_cost_firm=zeros(nfirms,nregions,nsector,ndest);
     for i=1:nfirms,
         for j=1:ndest,
             for s=1:nsector,
@@ -67,7 +67,7 @@ while error>0.001,
                     quant_prod(i,j,s,r)=market_penetration(i,j,s,r)*...
                         export_market_size(j)*price(i,s,r,j)^(-sigma(s))*export_market_price_ind(j,s)...
                         ^(sigma(s)-1);
-                    fix_cost_firm(i,s,r,j)=fixed_cost(j)*(1-(1-market_penetration(i,j,s,r)))^(1-beta)*1/(1-beta);
+                    fix_cost_firm(i,r,s,j)=fixed_cost(j)*(1-(1-market_penetration(i,j,s,r))^(1-beta)*1/(1-beta));
                 end
             end
         end
@@ -81,14 +81,16 @@ while error>0.001,
     quant_prod_reg_sec=sum(lab_demand_firm,1);
     quant_prod_reg_sec=squeeze(quant_prod_reg_sec);
     totexp_prod_reg_sec=quant_prod_reg_sec'.*comp_wage_prod;
+    totexp_prod_reg_sec(isnan(totexp_prod_reg_sec))=0;
     fix_cost_reg_sec=sum(fix_cost_firm,1);
     fix_cost_reg_sec=squeeze(fix_cost_reg_sec);
     totexp_market_reg_sec=fix_cost_reg_sec.*comp_wage_market;
     
     %Update wages
-    wage_blue_upd=(eta.*totexp_prod_reg_sec+gamma.*sum(totexp_market_reg_sec,3))./(nworkers_blue+1);
-    wage_white_upd=((1-gamma-delta).*sum(totexp_market_reg_sec,3)+(1-eta).*totexp_prod_reg_sec)./(nworkers_white+1);
-    wage_exp_upd=delta.*totexp_market_reg_sec./(nworkers_exp+1);
+    sum(totexp_market_reg_sec,3)
+    wage_blue_upd=(eta.*totexp_prod_reg_sec+gamma.*sum(totexp_market_reg_sec,3))./(nworkers_blue+1)
+    wage_white_upd=((1-gamma-delta).*sum(totexp_market_reg_sec,3)+(1-eta).*totexp_prod_reg_sec)./(nworkers_white+1)
+    wage_exp_upd=delta.*totexp_market_reg_sec./(nworkers_exp+1)
     wage_blue_old=wage_blue;
     wage_white_old=wage_white;
     wage_exp_old=wage_exp;
@@ -97,14 +99,6 @@ while error>0.001,
     wage_blue=.7*wage_blue+.3*wage_blue_upd;
     wage_white=.7*wage_white+.3*wage_white_upd;
     wage_exp=.7*wage_exp+.3*wage_exp_upd;
-    if sum(sum(isnan(wage_blue)))>0,
-        wage_blue=ones(nregions,nsector);
-    end
-    if sum(sum(isnan(wage_white)))>0,
-        wage_white=ones(nregions,nsector);
-    end
-    wag
-        
 end
 for i=1:ndest,
     comp_wage_market(:,:,i)=wage_blue.^gamma.*wage_exp(:,:,i).^delta.*wage_white.^(1-gamma-delta);
@@ -115,7 +109,7 @@ for i=1:nfirms,
         for r=1:nregions;
             for j=1:ndest;
                 lab_demand_white_firm(i,s,r,j)=((1-gamma-delta).*fix_cost_firm(i,s,r,j)...
-                *comp_wage_market(r,s))/wage_white(r,s);
+                    *comp_wage_market(r,s))/wage_white(r,s);
                 if market_penetration(i,j,s,r)==0,
                     lab_demand_white_firm(i,s,r,j)=0;
                 end
@@ -126,4 +120,7 @@ end
 
 lab_demand_white=floor(sum(lab_demand_white_firm));
 lab_demand_white=squeeze(lab_demand_white);
+lab_demand_white_net=lab_demand_white-nworkers_exp; %Idea: Only white collar workers in marketing can learn
+% If 
+
 nworkers_exp_upd=floor(delta_1*(lab_demand_white)+(1-delta_2)*nworkers_exp);

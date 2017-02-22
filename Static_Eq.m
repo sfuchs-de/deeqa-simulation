@@ -87,10 +87,10 @@ while error>0.001,
     totexp_market_reg_sec=fix_cost_reg_sec.*comp_wage_market;
     
     %Update wages
-    sum(totexp_market_reg_sec,3)
-    wage_blue_upd=(eta.*totexp_prod_reg_sec+gamma.*sum(totexp_market_reg_sec,3))./(nworkers_blue+1)
-    wage_white_upd=((1-gamma-delta).*sum(totexp_market_reg_sec,3)+(1-eta).*totexp_prod_reg_sec)./(nworkers_white+1)
-    wage_exp_upd=delta.*totexp_market_reg_sec./(nworkers_exp+1)
+    sum(totexp_market_reg_sec,3);
+    wage_blue_upd=(eta.*totexp_prod_reg_sec+gamma.*sum(totexp_market_reg_sec,3))./(nworkers_blue+1);
+    wage_white_upd=((1-gamma-delta).*sum(totexp_market_reg_sec,3)+(1-eta).*totexp_prod_reg_sec)./(nworkers_white+1);
+    wage_exp_upd=delta.*totexp_market_reg_sec./(nworkers_exp+1);
     wage_blue_old=wage_blue;
     wage_white_old=wage_white;
     wage_exp_old=wage_exp;
@@ -120,4 +120,8 @@ end
 
 lab_demand_white=floor(sum(lab_demand_white_firm));
 lab_demand_white=squeeze(lab_demand_white);
-nworkers_exp_upd=floor(delta_1*(lab_demand_white)+(1-delta_2)*nworkers_exp);
+lab_demand_white_net=lab_demand_white-nworkers_exp; %Idea: Only white collar workers in marketing can learn
+% If nworkers_exp is larger than white collar workers in marketing then
+% only experienced white collar workers work in marketing - no learning
+lab_demand_white_net(lab_demand_white_net<0)=0;
+nworkers_exp_upd=floor(delta_1*(lab_demand_white_net)+(1-delta_2)*nworkers_exp);
