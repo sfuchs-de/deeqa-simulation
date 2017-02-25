@@ -1,5 +1,6 @@
 % =========================================================================
-% SIMULATING DATA
+% SIMULATING DATA according to Market Penetration Model, endogenous
+% knowledge
 % by Simon Fuchs, Feb 2017
 %
 % INPUT:
